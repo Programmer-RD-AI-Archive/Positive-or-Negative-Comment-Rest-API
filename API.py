@@ -62,7 +62,7 @@ class Model(Module):
 
 
 model = Model()
-model.load_state_dict(torch.load("./model-sd.pt"))
+model.load_state_dict(torch.load("./model-sd.pth"))
 app = Flask(__name__)
 app.debug = True
 app.secret_key = "secret_key"
@@ -70,11 +70,12 @@ api = Api(app)
 
 args = reqparse.RequestParser()
 args.add_argument("chat", type=str, help="chat is required", required=True)
-
+args.add_argument("eval", type=str, help="eval is required (True or False)", required=True)
 
 class NLP_API(Resource):
     def get(self):
         data = args.parse_args()
+        eval_or_train = bool(data['eval'])
         data = data["chat"]
         data = tokenize(data)
         new_data = []
@@ -82,16 +83,22 @@ class NLP_API(Resource):
             new_data.append(stem(d))
         data = new_data
         data = bag_of_words(data, words)
-        model.eval()
-        pred = model(data)
+        if eval_or_train is True:
+            model.eval()
+            pred = model(torch.from_numpy(data).float().unsqueeze(0))
+        else:
+            model.train()
+            pred = model(torch.from_numpy(np.array([data,data])).float())[0]
         print(pred)
-        pred = torch.argmax(pred[0])
+        pred = torch.argmax(pred)
+        print(pred)
         pred = int(pred)
+        print(pred)
         if pred == 0:
             return {"Response": False}
         return {"Response": True}
 
 
-api.add_response(NLP_API, "/")
+api.add_resource(NLP_API, "/")
 if __name__ == "__main__":
     app.run(debug=True)
